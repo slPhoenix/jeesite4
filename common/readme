@@ -1,0 +1,992 @@
+docker容器配置
+vim /etc/docker/daemon.json
+
+{
+ "insecure-registries": ["10.91.38.250"],
+"log-driver":"json-file",
+"log-opts": {"max-size":"5000m", "max-file":"3"}
+}
+systemctl restart docker
+
+docker tag delron/fastdfs:latest 10.91.38.250/rnd/fastdfs
+上传镜像到harbor：docker push 10.91.38.250/rnd/fastdfs
+
+gitlab 启动
+docker run --name gitlab -d \
+-v /docker/gitlab/config:/etc/gitlab \
+-v /docker/gitlab/data:/var/opt/gitlab \
+-v /docker/gitlab/log:/var/log/gitlab \
+-p 2222:22 -p 48080:48080 -p 8433:433 \
+--restart=always \
+gitlab/gitlab-ce
+
+配置相关参数
+vim /docker/gitlab/config/gitlab.rb
+external_url 'http://10.91.37.51'
+# 配置ssh协议所使用的访问地址和端口
+gitlab_rails['gitlab_ssh_host'] = '10.91.37.51'
+# 此端口是run时22端口映射的222端口
+gitlab_rails['gitlab_shell_ssh_port'] = 2222 
+
+docker restart gitlab
+不然就是URL项目下面这个地址
+http://edc4aed953a8/root/cloud-office.git
+
+
+配置SSH
+打开本地git bash,使用如下命令生成ssh公钥和私钥对
+ssh-keygen -t rsa -C 'Matt@nwf66.com'
+然后一路回车(-C 参数是你的邮箱地址)
+# ~表示用户目录，比如我的windows就是C:\Users\Administrator，并复制其中的内容
+cat ~/.ssh/id_rsa.pub
+
+cd ~/.ssh
+把本机的公钥复制到52机器上
+ssh-copy-id 10.91.37.52
+然后可以直接通过 ssh 10.91.37.52 登录
+
+cat  /root/.ssh/authorized_keys
+
+51和52 root/
+
+启动ssh的服务：
+
+systemctl start sshd
+设置开机自动启动ssh服务
+
+systemctl enable sshd
+
+root/12345678
+matt/12345678
+
+jenkins 安装
+
+
+docker run \
+  -u root \
+  --name jenkins-blueocean \
+  -d \
+  -p 38080:8080 \
+  -p 50000:50000 \
+  -v /docker/jenkins:/var/jenkins_home \
+  -v /usr/local/jdk1.8.0_231:/usr/local/jdk1.8.0_231 \
+  -v /usr/local/apache-maven-3.6.2:/usr/local/apache-maven-3.6.2 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(which docker):/usr/bin/docker \
+  -v /usr/maven-repository:/usr/maven-repository \
+  jenkinsci/blueocean
+ 
+ docker run \
+  -u root \
+  --name jenkins-blueocean \
+  -d \
+  -p 38080:8080 \
+  -p 50000:50000 \
+  -env JAVA_HOME=/usr/local/jdk1.8.0_231 \
+  -env MAVEN_HOME=/usr/local/apache-maven-3.6.2 \
+  -v /docker/jenkins:/var/jenkins_home \
+  -v /usr/local/jdk1.8.0_231:/usr/local/jdk1.8.0_231 \
+  -v /usr/local/apache-maven-3.6.2:/usr/local/apache-maven-3.6.2 \
+  -v /etc/localtime:/etc/localtime \
+  -v /etc/profile:/etc/profile \
+  jenkinsci/blueocean
+  
+  
+  
+  docker exec -it jenkins-blueocean /bin/bash
+  
+  source /etc/profile
+  
+  
+  admin/123456
+  
+  
+  --------------------------------------------------------------------
+  
+  非docker安装 二进制安装
+  
+  1.安装jdk
+  2.安装maven
+  3.安装git
+  
+  4.配置相关参数
+   vim /etc/profile
+   
+  export JAVA_HOME=/usr/local/jdk1.8.0_231
+ 
+  export CLASSPATH=.:${JAVA_HOME}/lib/dt.jar:${JAVA_HOME}/lib/tools.jar
+
+  export PATH=$PATH:${JAVA_HOME}/bin
+
+  export M2_HOME=/usr/local/apache-maven-3.6.2
+
+  export PATH=$PATH:${JAVA_HOME}/bin:${M2_HOME}/bin
+  
+  通过命令source /etc/profile 让profile文件立即生效
+  
+  cd /usr/local/apache-maven-3.6.2/bin
+  maven添加jdk路径,不然pipline会提示The JAVA_HOME environment variable is not defined correctly
+  vi mvn
+  JAVA_HOME=/usr/local/jdk1.8.0_231
+  
+  执行二进制文件
+  rpm -ih jenkins-2.190.2-1.1.noarch.rpm
+  
+  这种方式安装的是开机自动启动的
+ 
+  配置jenkins的jdk对应路径
+  vi /etc/rc.d/init.d/jenkins
+  /usr/local/jdk1.8.0_231/bin/java
+  
+  jenkins用户更改为root 以及更改端口
+  vi /etc/sysconfig/jenkins 
+  
+  systemctl stop jenkins.service
+  systemctl restart jenkins
+  systemctl status jenkins
+  systemctl start jenkins.service 
+  
+  
+  service jenkins start
+  
+ jenkins 日志文件
+ cd /var/log/jenkins/
+ tail -f jenkins.log 
+ 
+ 初始化密码
+ /var/lib/jenkins/secrets/initialAdminPassword
+ 
+ 忘记密码更改密码
+ cd /var/lib/jenkins/users/admin_2508186996731980550
+ vi config.xml
+ #jbcrypt:$2a$10$MiIVR0rr/UhQBqT.bBq0QehTiQVqgNpUGyWW2nJObaVAM/2xSQdSq
+ 改成123456
+ 
+ 插件无法下载
+ http://localhost:8080/pluginManager/advanced
+ 更改升级站点
+http://updates.jenkins.io/update-center.json
+http://mirror.esuni.jp/jenkins/updates/update-center.json 
+ 
+ 
+卸载jenkins
+1、rpm卸载
+rpm -e jenkins
+
+2、检查是否卸载成功
+rpm -ql jenkins 
+
+3、彻底删除残留文件：
+find / -iname jenkins | xargs -n 1000 rm -rf
+
+jenkins插件
+
+Gitlab Merge Request Builder
+Allure
+Ansible
+Ansible Tower
+Config File Provider
+Ivy
+Maven Integration
+Artifactory
+Authorize Project
+Favorite
+Autofavorite for Blue Ocean
+Mercurial
+Handy Uri Templates 2.x API
+Bitbucket Branch Source
+Common API for Blue Ocean
+REST API for Blue Ocean
+Pub-Sub "light" Bus
+Pipeline SCM API for Blue Ocean
+HTML Publisher
+Design Language
+Blue Ocean Core JS
+Variant
+Web for Blue Ocean
+JWT for Blue Ocean
+REST Implementation for Blue Ocean
+Pipeline implementation for Blue Ocean
+Bitbucket Pipeline for Blue Ocean
+Dashboard for Blue Ocean
+Blue Ocean Pipeline Editor
+JIRA
+JIRA Integration for Blue Ocean
+GitHub Pipeline for Blue Ocean
+Personalization for Blue Ocean
+Server Sent Events (SSE) Gateway
+Events API for Blue Ocean
+Dashboard for Blue Ocean
+Config API for Blue Ocean
+Git Pipeline for Blue Ocean
+i18n for Blue Ocean
+Display URL for Blue Ocean
+Blue Ocean Executor Info
+Blue Ocean
+Basic Branch Build Strategies
+Build Authorization Token Root
+Build Token Trigger
+Build Monitor View
+Run Condition
+Conditional BuildStep
+External Monitor Job Type
+Text Finder Run Condition
+Copy Artifact
+Deploy to container
+Docker API
+Docker
+Docker Swarm
+Docker API
+Docker Compose Build Step
+Docker Slaves
+docker-build-step
+Email Extension Template
+EnvInject API
+Environment Injector
+jQuery
+Extended Choice Parameter
+Role-based Authorization Strategy
+Dynamic Extended Choice Parameter
+Text File Operations
+File Operations
+FTP publisher
+Generic Webhook Trigger
+Pipeline GitHub Notify Step
+GitHub Issues
+Git Changelog
+GitHub Authentication
+GitLab
+Gitlab Authentication
+GitHub Pull Request Coverage Status
+Git Parameter
+Gitlab API
+ruby-runtime
+Gitlab Hook
+Icon Shim
+GitHub Integration
+Green Balls
+H2 API
+HashiCorp Vault
+Hashicorp Vault Pipeline
+Infrastructure plugin for Publish Over X
+Ivy Report
+IvyTrigger
+Jackson Databind
+JaCoCo
+JIRA Pipeline Steps
+Mask Passwords
+Metrics
+Monitoring
+Nexus Artifact Uploader
+NodeJS
+Parameterized Trigger
+Parallel Test Executor
+Performance
+Performance Publisher
+Periodic Backup
+Pipeline Maven Integration
+Pipeline: Deploymon.io Steps
+Static Analysis Utilities
+PMD
+CheckStyle
+Findbugs
+Prometheus metrics
+Publish Over FTP
+Publish Over SSH
+Simple Theme
+SonarQube Scanner
+SSH Agent
+SSH
+SSH Pipeline Steps
+Throttle Concurrent Builds
+secondary timestamper
+Version Number
+Violation Comments to GitLab
+Backup
+Backup and interrupt job pluign
+ThinBackup
+
+sonarqube 安装
+admin/admin
+
+vim Dockerfile
+
+FROM sonarqube
+ADD sonar-l10n-zh-plugin-8.0-RC1.jar /opt/sonarqube/extensions/plugins/
+
+docker build -t sonarqube:zh .
+
+docker run --name postgres-db  --restart=always -p 5432:5432 -v /docker/postgresql/data:/var/lib/postgresql/data -e POSTGRES_USER=sonar -e POSTGRES_PASSWORD=sonar -d postgres
+docker run --name sonarqube --restart=always  --link postgres-db -e SONARQUBE_JDBC_URL=jdbc:postgresql://postgres-db:5432/sonar -p 9000:9000 -d 10.91.38.250/library/sonarqube:7.9.1-community-zh
+
+sysctl -w vm.max_map_count=262144 
+
+在   /etc/sysctl.conf文件最后添加一行
+vm.max_map_count=262144
+
+
+git安裝
+
+wget https://github.com/git/git/archive/v2.23.0.zip
+yum -y install zlib-devel openssl-devel cpio expat-devel gettext-devel curl-devel perl-ExtUtils-CBuilder perl-ExtUtils-MakeMaker
+yum install zip unzip
+unzip v2.23.0.zip
+cd git-2.23.0
+yum -y install gcc automake autoconf libtool make
+make prefix=/usr/local all
+make prefix=/usr/local install
+
+----yum 安装------------
+yum install git
+
+
+docker-compose  安装
+curl -L https://github.com/docker/compose/releases/download/1.25.1-rc1/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+
+第二种方案安装
+yum -y install epel-release
+yum -y install python-pip
+pip install docker-compose
+docker-compose version
+
+mysql 安装
+docker run --name mysqlserver  --restart=always -v /docker/mysql/conf:/etc/mysql/conf.d -v /docker/mysql/logs:/logs -v /docker/mysql/data:/var/lib/mysql -e MYSQL_ROOT_PASSWORD=123456 -d -i -p 3306:3306  10.91.38.250/library/mysql:5.7.28 
+
+连接harbor服务器
+
+vim /etc/docker/daemon.json
+
+{
+"insecure-registries": ["10.91.38.250"],
+"log-driver":"json-file",
+"log-opts": {"max-size":"5000m", "max-file":"3"}
+}
+重启docker服务：systemctl restart docker
+
+docker login 10.91.38.250，依次输入用户名和密码
+用户名rnd
+密码123qwE!@#
+
+
+prometheus安装
+docker run --name prometheus --restart=always -d -p 9090:9090 prom/prometheus
+
+
+
+docker run --name=prometheus -d \
+--restart=always \
+-p 9090:9090 \
+-v /docker/prometheus/config:/etc/prometheus:rw \
+-v /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime \
+prom/prometheus \
+--config.file=/etc/prometheus/prometheus.yml \
+--web.enable-lifecycle  
+
+
+修改配置文件后 刷新配置
+curl -X POST http://10.91.37.51:9090/-/reload
+
+node-exporter 安装
+docker run -d \
+--name=node-exporter \
+--restart=always \
+-p 9091:9100 \
+prom/node-exporter
+
+grafana安装
+
+docker run --name grafana --restart=always -d -p 3000:3000 grafana/grafana
+admin/123456
+
+修改服务器时间 date -s '2019-11-27 9:32:30'
+
+
+google/cadvisor  容器监控
+
+docker run \
+  --volume=/:/rootfs:ro \
+  --volume=/var/run:/var/run:ro \
+  --volume=/sys:/sys:ro \
+  --volume=/var/lib/docker/:/var/lib/docker:ro \
+  --volume=/dev/disk/:/dev/disk:ro \
+  --publish=9192:8080 \
+  --detach=true \
+  --name=cadvisor \
+  --restart=always \
+  google/cadvisor:latest
+  
+  
+redis_exporter 安装
+docker run -d  --restart=always  --name redis_exporter -p 9121:9121 oliver006/redis_exporter --redis.addr redis://10.91.37.1:6379 --redis.password myRedis
+
+
+mysqld_exporter安装
+
+重启mysql
+/usr/local/mysql/bin
+service mysql restart
+
+CREATE USER 'exporter'@'localhost' IDENTIFIED BY '123456' WITH MAX_USER_CONNECTIONS 3;
+GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO 'exporter'@'localhost';
+
+连接数
+show full processlist;
+set global max_connections=1000;
+show variables like '%max_connections%';
+show global status like 'Max_used_connections';
+
+
+非docker安装
+cd /usr/local/mysqld_exporter-0.12.1.linux-amd64
+nohup ./mysqld_exporter --config.my-cnf=/usr/local/mysql/my.cnf  &
+
+rancher 安装
+
+mysql 挂载
+CREATE DATABASE IF NOT EXISTS cattle COLLATE = 'utf8_general_ci' CHARACTER SET = 'utf8';
+GRANT ALL ON cattle.* TO 'cattle'@'%' IDENTIFIED BY 'cattle';
+GRANT ALL ON cattle.* TO 'cattle'@'localhost' IDENTIFIED BY 'cattle';
+
+
+docker run -d --restart=unless-stopped -p 9080:8080 rancher/server:stable \
+    --db-host 10.91.37.29 --db-port 3306 --db-user root --db-pass 123456 --db-name cattle
+	
+docker run -d --restart=unless-stopped --name rancher1.6 -p 9080:8080 rancher/server:stable
+
+
+rancher/agent 安装
+sudo docker run --rm --privileged -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/rancher:/var/lib/rancher rancher/agent:v1.2.11 http://10.91.37.29:9080/v1/scripts/E9D11B68B0097C78B6D6:1546214400000:vpj4RMID9WEQEFFnmRfn5jItjTQ
+
+
+http://10.91.37.51:9080/
+admin/123456
+
+redis 安装
+docker run -d --restart=always -v /docker/redis/data:/data --name redis -p 6379:6379 redis:5.0.6 --requirepass "123456"
+
+nginx 安装
+docker run --name nginx -p 80:80 -d nginx
+mkdir -p  /docker/nginx/logs /docker/nginx/conf 
+
+docker exec nginx ls /etc/nginx
+
+docker cp nginx:/etc/nginx/nginx.conf /docker/nginx/conf
+
+docker run \
+    --name nginx -d \
+	--restart=always \
+    --net=host -p 80:80 \
+	-v /docker/nginx/html:/usr/share/nginx/html \
+    -v /docker/nginx/conf/nginx.conf:/etc/nginx/nginx.conf \
+    -v /docker/nginx/logs:/var/log/nginx \
+    nginx
+	
+	
+	server {
+        listen       80;
+        server_name  110.173.53.26;
+		
+        location / {
+           root  /opt/data/app/android;
+		   error_page 405 =200  $request_uri;
+           default_type application/octet-stream;
+          }  
+    }
+
+	
+
+alertmanager 预警安装
+-v /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime
+docker run -d --restart=always --net=host -p 9093:9093 -v /docker/prometheus/alertmanager:/etc/alertmanager  -v /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime --name alertmanager prom/alertmanager
+
+alertmanager 集群配置
+10.91.37.51
+ 
+docker run -d --restart=always --net=host -p 9093:9093 \
+-v /docker/prometheus/alertmanager:/etc/alertmanager  \
+-v /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime \
+--name alertmanager prom/alertmanager  \
+--config.file=/etc/alertmanager/alertmanager.yml  \
+--cluster.listen-address 10.91.37.51:9099
+
+10.91.37.52
+
+docker run -d --restart=always --net=host -p 9093:9093  \
+ -v /docker/prometheus/alertmanager:/etc/alertmanager  \
+ -v /usr/share/zoneinfo/Asia/Shanghai:/etc/localtime  \
+ --name alertmanager prom/alertmanager  \
+ --config.file=/etc/alertmanager/alertmanager.yml \
+ --cluster.listen-address 10.91.37.52:9099  \
+ --cluster.peer 10.91.37.51:9099
+ 
+ pushgateway 安装
+ 
+ docker run -d \
+  --restart=always \
+  --name=pushgateway \
+  -p 9095:9091 \
+  prom/pushgateway
+  
+  
+  prometheus.yml 配置
+  
+  - job_name: pushgateway
+    static_configs:
+      - targets: ['10.91.37.29:9095']
+        labels:
+          instance: pushgateway
+          honor_labels: true
+		  
+
+----日志系统
+		  
+ 
+
+镜像生成
+ENTRYPOINT [ "sh", "-c", "java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar /cloud-server.jar --spring.config.location=file:/resources/application.properties,file:/resources/app.properties"]
+ENTRYPOINT ["java","-Djava.security.egd=file:/dev/./urandom","-jar","/cloud-demo.jar","--spring.config.location=file:/resources/application.properties,file:/resources/app.properties"]
+
+docker run --name cloud-server --restart=always  -m 1.3g -e JAVA_OPTS='-Xmx1024m' -v /docker/cloud-office/logs:/logs -v /docker/cloud-office/cloud-server:/resources  --net=host  -d -p 9001:9001 -t rnd/cloud-server:latest
+
+docker run --name cloud-server --restart=always  -m 1.3g -e JAVA_OPTS='-Xmx10m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/jvm-stack/heapdump.hprof' -v /docker/cloud-office/logs:/logs -v /docker/cloud-office/cloud-server:/resources -v /docker/cloud-office/cloud-server/jvm-stack:/jvm-stack --net=host  -d -p 9001:9001 -t rnd/cloud-server:latest
+
+
+group_id=rnd
+#全局工具配置maven的名称
+maven_name=maven3.6.2
+#镜像仓库地址
+registry_url=10.91.38.250
+#注册中心地址
+eureka_url=10.91.37.51:8000
+shell_path=/opt/jenkins_shell
+latest_tag=latest
+image_bak_tag=bak
+slave_images=52
+
+select_ssh_name
+请选择部署服务器
+2
+,
+cloud_dev_master,cloud_dev_slave
+
+
+cloud_dev_master
+51(master节点),52(slave节点)
+select_project_name
+请选择服务
+10
+,
+cloud-eureka@8000,cloud-admin-service@9100@cloud-admin,cloud-admin-front@8188@cloud-admin,cloud-auth@9009,cloud-demo@9002@cloud-business,cloud-server@9001@cloud-business,cloud-gateway@7000
+cloud-eureka@8000
+
+select_option_type
+发布操作类型（如完整发布、回滚等）
+5
+,
+full_publish,checkout@build@upload,pull@bak@run,rollback
+full_publish
+完整发布流程(拉取源码、代码分析、编译打包、生成镜像、上传到仓库、在目标机器部署),仅生成镜像(拉取源码、编译打包、生成镜像),仅部署(直接仓库最新镜像),回滚到上一个版本(部署失败时使用)
+
+
+
+pipeline {
+    agent any
+	// 注册工具
+    tools { 
+        maven "${maven_name}"
+    }	
+    stages {
+		// 获取或更新最新代码
+        stage('check out') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                  return  (select_option_type.indexOf('full_publish') >= 0 || select_option_type.indexOf('checkout') >= 0)
+            }}
+            steps {
+                // git 通过 SSH 私钥、公钥认证
+                //checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '8a2b1cd7-7b6a-4f92-90b1-369c59536e97', url: 'ssh://git@10.91.37.51:2222/RND/cloud-office.git']]])
+				// git 通过 用户名、密码认证
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: 'd6d03446-ba4e-4c27-887a-e3c2b4c145be', url: 'http://10.91.37.51:48080/RND/cloud-office.git']]])
+                echo 'skip checkout'
+            }
+        }
+        
+        //sonar分析代码  
+        stage('SonarQube analysis') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                   return  (select_option_type.indexOf('full_publish') >= 0 || select_option_type.indexOf('build') >= 0)
+            }}
+            steps {
+                 withSonarQubeEnv('sonar'){
+                sh '''
+				  mvn sonar:sonar \
+                  -Dsonar.projectKey=cloud-office \
+                  -Dsonar.projectVersion=1.0 \
+                  -Dsonar.host.url=http://10.91.37.51:9000 \
+                  -Dsonar.login=1ac219467e98780d90e8f53ce244d89a643aa194 \
+                  -Dsonar.language=java \
+                  -Dsonar.java.binaries=/var/lib/jenkins/workspace/cloud-eureka-pipeline/ \
+                  -Dsonar.java.source=1.8  \
+                  -Dsonar.java.target=1.8  \
+                  -Dsonar.sources=src \
+                  -Dsonar.exclusions=**/test/**
+				  '''
+            }
+        }
+    }
+		// maven 编译依赖项目
+        stage('build dependence') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                   return  (select_option_type.indexOf('full_publish') >= 0 || select_option_type.indexOf('build') >= 0)
+            }}
+            steps {
+                script {
+					sh '''
+					mvn -f cloud-parent  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-core  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-db  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-log  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-redis  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-security  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-web  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					'''	
+				 echo 'skip build'
+				}  
+            }
+        }
+		// 本地镜像删除（如果存在）、生成新镜像
+        stage('build&upload&run images') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                   return  (select_option_type.indexOf('full_publish') >= 0 || select_option_type.indexOf('run') >= 0)
+            }}
+            steps {
+                script {
+                    echo "registry_url=${registry_url}"
+					def selectedProjectNames = "${select_project_name}".split(',')
+					def selectedSshNames = "${select_ssh_name}".split(',')
+					for(int i=0; i<selectedProjectNames.size();i++)
+					{
+					    def last_tag = '';
+					    def selectedProjectPath = '';
+					    def selectedProjectName = selectedProjectNames[i]
+					    def selectLength  = selectedProjectName.split('@').size();
+					    def selectedProjectDir = selectedProjectName.split('@')[0]
+					    def selectedProjectPort = selectedProjectName.split('@')[1]
+					    if (selectLength >2) {
+					        selectedProjectPath = selectedProjectName.split('@')[2]+'/'
+					    } else {
+					        selectedProjectPath = ''
+					    }
+
+                        echo "####delete_image##### group_id=${group_id},selectedProjectDir=${selectedProjectDir},latest_tag=${latest_tag}"
+
+					   // sh "$shell_path/delete_image.sh $group_id/$selectedProjectDir $latest_tag"
+					
+					    sh "mvn -f ${selectedProjectPath}$selectedProjectDir  clean install dockerfile:build -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true"
+
+                        // sh "$shell_path/upload_image.sh $group_id/$selectedProjectDir $latest_tag $registry_url"
+                         
+					    echo "######### selectedProjectDir=${selectedProjectDir},selectedProjectPort=${selectedProjectPort}"
+					    
+					    for(int j=0; j<selectedSshNames.size();j++)
+					    {
+					        def selectedSshName = selectedSshNames[j]
+					        echo "selectedSshName=${selectedSshName}"
+							
+							// 获取eureka profile
+							
+							def profile = "--spring.profiles.active="
+							if(selectedSshName == "cloud_dev_master")
+							{
+								profile = profile + "peer1"
+								last_tag = latest_tag
+							}
+							else if(selectedSshName == "cloud_dev_slave")
+							{
+								profile = profile + "peer2"
+								echo "####tag##### group_id=${group_id},selectedProjectDir=${selectedProjectDir},latest_tag=${latest_tag}"
+								sh """
+								docker tag $group_id/$selectedProjectDir $registry_url/$group_id/$selectedProjectDir:${slave_images}
+								docker push $registry_url/$group_id/$selectedProjectDir:${slave_images}
+	
+								docker rmi $registry_url/$group_id/$selectedProjectDir:${slave_images}
+								"""
+								last_tag = slave_images
+								//docker rmi $group_id/$selectedProjectDir
+							}
+					        
+                            sshPublisher(publishers: [sshPublisherDesc(configName: "$selectedSshName", transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: "$shell_path/deploy_image.sh $group_id/$selectedProjectDir $last_tag $selectedProjectPort $selectedProjectPort $registry_url $eureka_url $image_bak_tag $profile $selectedProjectDir", execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '', remoteDirectorySDF: false, removePrefix: '', sourceFiles: '')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+
+					    }
+					    
+					}
+				}	
+                    
+            }
+		}
+            
+		stage('roll back') {
+			//返回为true时才会执行下面的步骤
+			when {expression {
+				   return  (select_option_type.indexOf('rollback') >= 0)
+			}}
+			steps {
+				script {
+					def selectedProjects = "${select_project_name}".split(',')
+					def selectedSshName = "${select_ssh_name}".split(',')
+					for (int i = 0; i < selectedProjects.size(); ++i) {
+						//（1）从选项中分析出项目名（或项目文件夹）
+						def projectName = selectedProjects[i]
+						echo "#########projectName:${projectName}###################"
+						def projectDir = projectName.split('@')[0]
+						def port = projectName.split('@')[1]
+						def imageName = "${group_id}/${projectDir}"
+						
+						//（2）回滚每一台集群机器
+						for (int j = 0; j < selectedSshName.size(); ++j) {	
+							def curSshName = selectedSshName[j]
+							sshPublisher(publishers: [sshPublisherDesc(configName: "$curSshName", transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: "$shell_path/rollback_service.sh $imageName $latest_tag $port $port $registry_url $eureka_url $image_bak_tag $projectDir", execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '', remoteDirectorySDF: false, removePrefix: '', sourceFiles: '')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+						}
+					}
+					echo "roll back"
+				}  
+			}
+		}
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------tomcat war部署--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#全局工具配置maven的名称
+maven_name=maven3.6.2
+shell_path=/opt/jenkins_shell
+#tomcat路径
+projet_path=/usr/local/tomcat
+#scp war包
+scp_war=/root/office-war
+
+select_ssh_name
+请选择部署服务器
+2
+,
+cloud_dev_master@10.91.37.51,cloud_dev_slave@10.91.37.52
+cloud_dev_master@10.91.37.51
+51(master节点),52(slave节点)
+
+select_project_name
+请选择服务
+20
+,
+cloud-eureka@8000,cloud-admin-service@7100@cloud-admin,consumer-demo-service@9002@cloud-business,organization-service@9003@cloud-business,provider-demo-service@9001@cloud-business
+cloud-eureka@8000
+
+
+select_option_type
+发布操作类型
+5
+,
+full_publish,checkout@build@upload
+full_publish
+完整发布流程(拉取源码、代码分析、公共jar编译打包、代码编译、在目标机器部署),直接部署(拉取源码、代码编译、在目标机器部署)
+
+
+
+
+
+pipeline {
+    agent any
+	// 注册工具
+    tools { 
+        maven "${maven_name}"
+    }	
+    stages {
+		// 获取或更新最新代码
+        stage('check out') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                  return  (select_option_type.indexOf('full_publish') >= 0 || select_option_type.indexOf('checkout') >= 0)
+            }}
+            steps {
+				// git 通过 用户名、密码认证
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '53408492-3168-43a0-8dc5-75b8f9b1effb', url: 'http://10.91.37.26/RND/game_management/cloud-office.git']]])
+                echo 'skip checkout'
+            }
+        }
+        
+        //sonar分析代码  
+        stage('SonarQube analysis') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                   return  (select_option_type.indexOf('full_publish') >= 0)
+            }}
+            steps {
+                 withSonarQubeEnv('sonar'){
+                sh '''
+				  mvn sonar:sonar \
+                  -Dsonar.projectKey=cloud-office \
+                  -Dsonar.projectVersion=1.0 \
+                  -Dsonar.host.url=http://10.91.37.29:9000 \
+                  -Dsonar.login=534f4f6901fcd7e2e5f565870f516ac8dc728e2e \
+                  -Dsonar.language=java \
+                  -Dsonar.java.binaries=/var/lib/jenkins/workspace/cloud-pipeline/ \
+                  -Dsonar.java.source=1.8  \
+                  -Dsonar.java.target=1.8  \
+                  -Dsonar.sources=src \
+                  -Dsonar.exclusions=**/test/**
+				  '''
+            }
+        }
+    }
+		// maven 编译依赖项目
+        stage('build dependence') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                   return  (select_option_type.indexOf('full_publish') >= 0)
+            }}
+            steps {
+                script {
+					sh '''
+					mvn -f cloud-common/cloud-common-core  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-db  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-log  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-redis  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-swagger  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-web  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-apollo  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-common/cloud-common-message  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					mvn -f cloud-business/api-skeleton  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true
+					'''	
+				 echo 'skip build'
+				}  
+            }
+        }
+		// 本地镜像删除（如果存在）、生成新镜像
+        stage('build&run') {
+            //返回为true时才会执行下面的步骤
+            when {expression {
+                   return  (select_option_type.indexOf('full_publish') >= 0 || select_option_type.indexOf('build') >= 0)
+            }}
+            steps {
+                script {
+					def selectedProjectNames = "${select_project_name}".split(',')
+					def selectedSshNames = "${select_ssh_name}".split(',')
+					for(int i=0; i<selectedProjectNames.size();i++)
+					{
+					    //项目父路径
+					    def selectedProjectPath = '';
+						def selectedProjectName = selectedProjectNames[i]
+						def selectLength  = selectedProjectName.split('@').size();
+						//项目名
+						def selectedProjectDir = selectedProjectName.split('@')[0]
+						//端口号
+					    def selectedProjectPort = selectedProjectName.split('@')[1]
+						 if (selectLength >2) {
+					        selectedProjectPath = selectedProjectName.split('@')[2]+'/'+selectedProjectDir
+					    } else {
+					        selectedProjectPath = selectedProjectDir
+					    }
+						echo "#########select_option_type =${select_option_type}"
+                        echo "#########selectedProjectName=${selectedProjectName}"
+						
+						sh "mvn -f ${selectedProjectPath}  clean install -Dautoconfig.skip=true -Dmaven.test.skip=false -Dmaven.test.failure.ignore=true"
+						
+						echo "#########${selectedProjectPath},代码已经编译"
+						
+					    for(int j=0; j<selectedSshNames.size();j++)
+					    {
+					        def selectedSshName = selectedSshNames[j].split('@')[0]
+					        def sshsever = selectedSshNames[j].split('@')[1]
+					        echo "目标机器：selectedSshName=${selectedSshName},sshsever=$sshsever"
+							def projectName = selectedProjectPath+'/target/'+selectedProjectDir+'.war'
+							echo "目标war包：projectName=${projectName}"
+							
+							sh """
+							   scp ${projectName} ${sshsever}:$scp_war
+							"""
+							def projectNamePort = "${projet_path}"+"/"+selectedProjectDir+"-"+selectedProjectPort
+							echo "tomcat文件名  ：projectNamePort=${projectNamePort}"
+							sshPublisher(publishers: [sshPublisherDesc(configName: "$selectedSshName", transfers: [sshTransfer(cleanRemote: false, excludes: '', execCommand: "$shell_path/tomcat_up.sh $selectedProjectDir $projectNamePort $scp_war", execTimeout: 120000, flatten: false, makeEmptyDirs: false, noDefaultExcludes: false, patternSeparator: '[, ]+', remoteDirectory: '', remoteDirectorySDF: false, removePrefix: '', sourceFiles: '')], usePromotionTimestamp: false, useWorkspaceInPromotion: false, verbose: false)])
+							
+					        
+                           
+
+					    }
+					    
+					}
+				}	
+                    
+            }
+		}
+            
+			
+    }
+}
+
+
+----------------------------------nginx部署-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+#全局工具配置maven的名称
+maven_name=maven3.6.2
+#静态资源存放地址
+projet_path=/docker/nginx/html/front
+
+
+pipeline {
+    agent any
+	// 注册工具
+    tools { 
+        maven "${maven_name}"
+    }	
+    stages {
+		// 获取或更新最新代码
+        stage('check out') {
+ 
+            steps {
+				// git 通过 用户名、密码认证
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], doGenerateSubmoduleConfigurations: false, extensions: [], submoduleCfg: [], userRemoteConfigs: [[credentialsId: '53408492-3168-43a0-8dc5-75b8f9b1effb', url: 'http://10.91.37.26/RND/game_management/cloud-office.git']]])
+                echo 'skip checkout'
+            }
+        }
+       
+        stage('copy') {
+            steps {
+                script {
+					
+					sh """
+					    rm -rf $projet_path/view
+					    cp -R  cloud-admin/cloud-admin-front/src/main/view/  $projet_path
+					   """
+				}	
+                    
+            }
+		}
+            
+			
+    }
+}
+
+  
