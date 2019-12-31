@@ -1,0 +1,104 @@
+i#! /bin/sh
+registry_url=$5
+image_name=$1
+image_tag=$2
+image_port=$3
+host_port=$4
+eureka_url=$6
+image_bak_tag=$7
+image_full_name=$registry_url/$image_name
+image_params=$8
+container_name=$9
+
+# 备份镜像到镜像仓库
+echo "第一步，备份镜像到镜像仓库"
+/opt/jenkins_shell/backup_image.sh $image_name $image_tag $registry_url $image_bak_tag
+
+#停止当前运行项目的容器并且删除容器，然后删除相应的镜像
+echo "第二步，停止当前运行项目的容器并且删除容器，然后删除相应的镜像"
+/opt/jenkins_shell/delete_image.sh $image_full_name $image_tag
+# 如果当前运行的是回滚的镜像，则备份的镜像也需要删除
+/opt/jenkins_shell/delete_image.sh $image_full_name $image_bak_tag
+
+
+#上传镜像到仓库
+echo "第三步参数 image_params :$image_params"
+if [[ $image_params == *peer1* ]]
+then
+echo "第三步，上传镜像到仓库，当前节点为：$image_params"
+/opt/jenkins_shell/upload_image.sh $image_name $image_tag $registry_url
+else
+echo "第三步，上传镜像到仓库，当前节点为：$image_params,已经上传过了，无需上传"
+fi
+
+#向eureka发送指令，让服务停止，即不再接收新的请求，这样终止服务将更柔性化
+#echo "第四步，pull镜像并且启动容器"
+nohup sh /opt/jenkins_shell/disable_service.sh ${container_name} ${image_port} ${eureka_url}
+
+# 休眠一段时间，建议设置超过90秒以上，演示可以设置为30秒
+# sleep 2m
+sleep 5s
+
+
+#两个可以不用停止WEB服务就可以清空nohup.out的命令。
+#第一种：cp /dev/null nohup.out
+#第二种：cat /dev/null > nohup.out
+cp /dev/null nohup.out
+
+#pull镜像
+docker pull $image_full_name:$image_tag
+
+#运行镜像
+docker run --name $container_name  --restart=always -m 1.3g -e JAVA_OPTS='-Xmx1024m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/jvm-stack/heapdump.hprof'  -v /docker/cloud-office/logs:/logs  -v /docker/cloud-office/$container_name:/resources -v /docker/cloud-office/$container_name/jvm-stack:/jvm-stack  --net=host  -d -p ${image_port}:${host_port}  -t ${image_full_name}:$image_tag $image_params
+
+
+
+
+#! /bin/sh
+export JAVA_HOME=/usr/local/jdk1.8.0_231
+#项目名称
+projet_name=$1
+#tomcat部署路径
+projet_path=$2
+#scp，war路径
+project_war=$3
+
+echo "参数：projet_name=$projet_name ,projet_path=$projet_path,project_war=$project_war"
+
+#杀掉原有项目进程
+TOMCATTHREAD=`ps aux | grep  $projet_path/conf  | grep -v grep`
+
+echo "$TOMCATTHREAD" |wc -L
+echo "TOMCATTHREAD=$TOMCATTHREAD" 
+THREADLIST=(${TOMCATTHREAD// / })
+echo "THREADLIST=$THREADLIST,${THREADLIST[1]}"
+ PID=${THREADLIST[1]}
+echo "pid=$PID"
+if [ -z  "$PID"  ] 
+then  
+   echo "TOMCAT NOT START"  
+else  
+   
+    kill -9 $PID 
+    sleep 1s  
+fi  
+
+echo "开始清除旧war包！"
+#删除旧包
+rm -rf $projet_path/webapps/ROOT/*
+#rm -rf $projet_path/webapps/$projet_name
+#rm -rf $projet_path/webapps/$projet_name.war
+echo "旧包已经被删除!"
+
+cp ${project_war}/${projet_name}.war ${projet_path}/webapps/ROOT
+cd $projet_path/webapps/ROOT/
+unzip $projet_name.war
+rm -rf $project_war/$projet_name.war
+
+echo "copy war包到对应tomcat目录!"
+
+cd $projet_path/bin/
+pwd
+./startup.sh
+
+echo "$projet_name 已经启动成功！"
